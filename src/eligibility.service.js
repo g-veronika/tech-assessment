@@ -7,101 +7,86 @@ class EligibilityService {
    * @param criterias
    * @return {boolean}
    */
+
   isEligible(cart, rawCriterias) {
     const criterias = this.transformCriteria(rawCriterias);
-    let allCriteriaPassed = true;
 
-    if (Object.keys(criterias).length === 0) {
-      return allCriteriaPassed;
-    }
+    if (Object.keys(criterias).length === 0) return true;
 
     for (const element in criterias) {
       const criteria = criterias[element];
       const cartElementToCheck = this.getNestedValue(cart, element);
 
-      console.log("cartElementToCheck:", cartElementToCheck);
-      console.log("criteria:", criteria);
-      console.log("cart", cart);
-
-      if (cartElementToCheck === undefined || cartElementToCheck === null) {
-        allCriteriaPassed = false;
-        break;
-      }
-
-      if (typeof criteria !== "object" || Array.isArray(criteria)) {
-        if (cartElementToCheck != criteria) {
-          allCriteriaPassed = false;
-          break;
-        }
-        continue;
-      }
-
-      if (criteria.hasOwnProperty("and")) {
-        let isValid = Array.isArray(criteria.and)
-          ? criteria.and.every((element) =>
-              this.checkComparison(cartElementToCheck, element)
-            )
-          : Object.entries(criteria.and).every(([key, value]) =>
-              this.checkComparison(cartElementToCheck, { [key]: value })
-            );
-        if (!isValid) {
-          allCriteriaPassed = false;
-          break;
-        }
-      } else if (criteria.hasOwnProperty("or")) {
-        let isValid = Object.entries(criteria.or).some(([key, value]) =>
-          this.checkComparison(cartElementToCheck, { [key]: value })
-        );
-        if (!isValid) {
-          allCriteriaPassed = false;
-          break;
-        }
-      } else {
-        const condition = this.checkComparison(cartElementToCheck, criteria);
-
-        if (!condition) {
-          allCriteriaPassed = false;
-          break;
-        }
+      if (!this.isCriteriaMet(cartElementToCheck, criteria)) {
+        return false;
       }
     }
 
+    return true;
+  }
 
-    return allCriteriaPassed;
+  isCriteriaMet(cartElement, criteria) {
+    if (cartElement === undefined || cartElement === null) return false;
+
+    if (typeof criteria !== "object" || Array.isArray(criteria)) {
+      return cartElement == criteria;
+    }
+
+    if (criteria.hasOwnProperty("and")) {
+      return this.checkLogicalCondition(cartElement, criteria.and, "and");
+    }
+
+    if (criteria.hasOwnProperty("or")) {
+      return this.checkLogicalCondition(cartElement, criteria.or, "or");
+    }
+
+    return this.checkComparison(cartElement, criteria);
+  }
+
+  checkLogicalCondition(cartElement, logicalCriteria, conditionType) {
+    if (Array.isArray(logicalCriteria)) {
+      return conditionType === "and"
+        ? logicalCriteria.every((criterion) =>
+            this.checkComparison(cartElement, criterion)
+          )
+        : logicalCriteria.some((criterion) =>
+            this.checkComparison(cartElement, criterion)
+          );
+    }
+
+    return conditionType === "and"
+      ? Object.entries(logicalCriteria).every(([key, value]) =>
+          this.checkComparison(cartElement, { [key]: value })
+        )
+      : Object.entries(logicalCriteria).some(([key, value]) =>
+          this.checkComparison(cartElement, { [key]: value })
+        );
   }
 
   checkComparison(cartValue, criteria) {
-    if (cartValue === undefined || cartValue === null) {
-      return false;
-    }
+    if (cartValue === undefined || cartValue === null) return false;
 
     if (Array.isArray(cartValue)) {
       return cartValue.some((item) => this.checkComparison(item, criteria));
     }
 
     if (typeof cartValue === "object" && !Array.isArray(cartValue)) {
-      for (let key in criteria) {
-        if (cartValue[key] !== criteria[key]) return false;
-        else if (!this.checkComparison(cartValue[key], criteria[key])) {
-          return false;
-        }
-      }
+      return Object.keys(criteria).every((key) => {
+        return (
+          cartValue[key] === criteria[key] &&
+          this.checkComparison(cartValue[key], criteria[key])
+        );
+      });
     }
 
-    if (criteria.hasOwnProperty("gt") && cartValue <= criteria.gt) {
+    if (criteria.hasOwnProperty("gt") && cartValue <= criteria.gt) return false;
+    if (criteria.hasOwnProperty("lt") && cartValue >= criteria.lt) return false;
+    if (criteria.hasOwnProperty("gte") && cartValue < criteria.gte)
       return false;
-    } else if (criteria.hasOwnProperty("lt") && cartValue >= criteria.lt) {
+    if (criteria.hasOwnProperty("lte") && cartValue > criteria.lte)
       return false;
-    } else if (criteria.hasOwnProperty("gte") && cartValue < criteria.gte) {
+    if (criteria.hasOwnProperty("in") && !criteria.in.includes(cartValue))
       return false;
-    } else if (criteria.hasOwnProperty("lte") && cartValue > criteria.lte) {
-      return false;
-    } else if (
-      criteria.hasOwnProperty("in") &&
-      !criteria.in.includes(cartValue)
-    ) {
-      return false;
-    }
 
     return true;
   }
