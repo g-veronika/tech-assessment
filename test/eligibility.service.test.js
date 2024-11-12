@@ -243,7 +243,7 @@ describe('Eligibility', () => {
 
       // const criteria = { total: { or: { gt: 10, gt: 20 } } };
 
-      const criteria = { total: { and: [{ gt: 10 }, { gt: 20 }] } };
+      const criteria = { total: { or: [{ gt: 10 }, { gt: 20 }] } };
 
       const eligibilityService = new EligibilityService();
       const actualEligibility = eligibilityService.isEligible(cart, criteria);
